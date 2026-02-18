@@ -1,6 +1,7 @@
-streamlit
-pandas
-openpyxl
-st-gsheets-connection
-gspread
-google-auth
+streamlit==1.31.1
+pandas==2.2.1
+openpyxl==3.1.2
+st-gsheets-connection==0.0.4
+gspread==6.0.2
+google-auth==2.28.2
+
