@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 from datetime import date
-from st_gsheets_connection import GSheetsConnection
+import gspread
 
 st.set_page_config(page_title="Taxi - Registro Diario", layout="wide")
 
@@ -27,17 +27,40 @@ def formato_pesos(valor):
     return f"$ {valor:,.0f}".replace(",", ".")
 
 # =========================
-# CONEXIÓN A GOOGLE SHEETS
+# GOOGLE SHEETS (con gspread)
 # =========================
-@st.cache_data(ttl=10)
-def read_sheet(conn):
-    df = conn.read(worksheet="datos", ttl=0)
+def get_ws():
+    """
+    Requiere en st.secrets:
+    - spreadsheet_id
+    - service_account (dict con el JSON)
+    - worksheet_name (opcional; por defecto "datos")
+    """
+    spreadsheet_id = st.secrets["spreadsheet_id"]
+    worksheet_name = st.secrets.get("worksheet_name", "datos")
 
-    if df is None or len(df) == 0:
+    # st.secrets["service_account"] debe contener el JSON completo de la cuenta de servicio
+    sa_info = dict(st.secrets["service_account"])
+    gc = gspread.service_account_from_dict(sa_info)
+
+    sh = gc.open_by_key(spreadsheet_id)
+    ws = sh.worksheet(worksheet_name)
+    return ws
+
+@st.cache_data(ttl=10)
+def read_sheet() -> pd.DataFrame:
+    ws = get_ws()
+    values = ws.get_all_values()  # lista de listas
+
+    if not values or len(values) < 1:
         return pd.DataFrame(columns=[COL_FECHA, COL_PROD, COL_COND, COL_OBS, COL_GAST])
 
-    df.columns = [str(c).strip() for c in df.columns]
+    headers = [h.strip() for h in values[0]]
+    rows = values[1:]
 
+    df = pd.DataFrame(rows, columns=headers)
+
+    # Asegura columnas
     for c in [COL_FECHA, COL_PROD, COL_COND, COL_OBS, COL_GAST]:
         if c not in df.columns:
             df[c] = None
@@ -51,10 +74,19 @@ def read_sheet(conn):
     df[COL_COND] = df[COL_COND].astype(str).str.upper().str.strip()
     df[COL_OBS] = df[COL_OBS].fillna("")
 
-    return df.sort_values([COL_FECHA, COL_COND]).reset_index(drop=True)
+    return df.sort_values([COL_FECHA, COL_COND], na_position="last").reset_index(drop=True)
 
-def write_sheet(conn, df):
-    conn.update(worksheet="datos", data=df)
+def write_sheet(df: pd.DataFrame):
+    ws = get_ws()
+    # Convierte fechas a texto para Sheets
+    out = df.copy()
+    out[COL_FECHA] = out[COL_FECHA].astype(str)
+
+    data = [out.columns.tolist()] + out.astype(str).values.tolist()
+
+    # Limpia y escribe
+    ws.clear()
+    ws.update("A1", data)
 
 # =========================
 # GUARDAR O ACTUALIZAR DÍA
@@ -79,10 +111,11 @@ def upsert_day(df, fecha, prod_jorge, prod_erik, gastos, observacion):
             }])
             df = pd.concat([df, nueva], ignore_index=True)
 
+    # Gastos/observación del día van en JORGE (un solo gasto por día)
     set_row("JORGE", prod_jorge, observacion, gastos)
-    set_row("ERIK", prod_erik, "", 0)
+    set_row("ERIK",  prod_erik,  "",          0)
 
-    return df
+    return df.sort_values([COL_FECHA, COL_COND], na_position="last").reset_index(drop=True)
 
 # =========================
 # RESUMEN DIARIO
@@ -106,7 +139,9 @@ def daily_summary(df):
     gastos = df.groupby(COL_FECHA)[COL_GAST].max().reset_index()
     obs = df.groupby(COL_FECHA)[COL_OBS].max().reset_index()
 
-    resumen = pivot.merge(gastos, on=COL_FECHA).merge(obs, on=COL_FECHA)
+    resumen = pivot.merge(gastos, on=COL_FECHA, how="left").merge(obs, on=COL_FECHA, how="left")
+    resumen[COL_GAST] = resumen[COL_GAST].fillna(0)
+    resumen[COL_OBS] = resumen[COL_OBS].fillna("")
 
     resumen["TOTAL_PRODUCIDO"] = resumen["JORGE"] + resumen["ERIK"]
     resumen["NETO"] = resumen["TOTAL_PRODUCIDO"] - resumen[COL_GAST]
@@ -118,11 +153,8 @@ def daily_summary(df):
 # =========================
 st.title("🚕 Sistema Taxi - Jorge y Erik")
 
-conn = st.connection("gsheets", type=GSheetsConnection)
+df = read_sheet()
 
-df = read_sheet(conn)
-
-# -------- INGRESO --------
 st.subheader("➕ Registro Diario")
 
 with st.form("form_dia"):
@@ -139,11 +171,10 @@ with st.form("form_dia"):
 
 if guardar:
     df = upsert_day(df, fecha, prod_j, prod_e, gastos, obs)
-    write_sheet(conn, df)
+    write_sheet(df)
     st.cache_data.clear()
     st.success("✅ Día guardado correctamente")
 
-# -------- RESUMEN --------
 st.subheader("📊 Resumen Diario")
 
 res = daily_summary(df)
@@ -172,3 +203,4 @@ if not res.empty:
 
 else:
     st.info("No hay datos registrados aún.")
+
