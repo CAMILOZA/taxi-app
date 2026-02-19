@@ -3,7 +3,11 @@ import streamlit as st
 from datetime import date
 import gspread
 
-st.set_page_config(page_title="Taxi - Registro Diario", layout="wide")
+st.set_page_config(
+    page_title="🚕 App Socios",
+    page_icon="🚕",
+    layout="centered"
+)
 
 # =========================
 # CONFIGURACIÓN
@@ -151,7 +155,7 @@ def daily_summary(df):
 # =========================
 # INTERFAZ
 # =========================
-st.title("🚕 Sistema Taxi - Jorge y Erik")
+st.title("🚕 App Socios")
 
 df = read_sheet()
 
@@ -203,4 +207,5 @@ if not res.empty:
 
 else:
     st.info("No hay datos registrados aún.")
+
 
