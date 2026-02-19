@@ -1,4 +1,4 @@
-    import pandas as pd
+import pandas as pd
 import streamlit as st
 from datetime import date
 import gspread
@@ -207,6 +207,7 @@ if not res.empty:
 
 else:
     st.info("No hay datos registrados aún.")
+
 
 
 
