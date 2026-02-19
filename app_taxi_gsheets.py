@@ -1,4 +1,4 @@
-import pandas as pd
+    import pandas as pd
 import streamlit as st
 from datetime import date
 import gspread
@@ -150,7 +150,7 @@ def daily_summary(df):
     resumen["TOTAL_PRODUCIDO"] = resumen["JORGE"] + resumen["ERIK"]
     resumen["NETO"] = resumen["TOTAL_PRODUCIDO"] - resumen[COL_GAST]
 
-    return resumen.sort_values(COL_FECHA).reset_index(drop=True)
+    return resumen.sort_values(COL_FECHA, ascending=False).reset_index(drop=True)
 
 # =========================
 # INTERFAZ
@@ -207,5 +207,6 @@ if not res.empty:
 
 else:
     st.info("No hay datos registrados aún.")
+
 
 
