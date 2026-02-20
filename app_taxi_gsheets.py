@@ -4,7 +4,7 @@ from datetime import date
 import gspread
 
 # =========================
-# CONFIG PÁGINA (nombre/ícono)
+# CONFIG PÁGINA
 # =========================
 st.set_page_config(
     page_title="Taxi Camilo",
@@ -189,17 +189,9 @@ def daily_summary(df):
 st.title("🚕 Taxi Camilo")
 st.caption("Registro diario • Jorge y Erik • Gastos: 1 por día • Valores en COP")
 
-# Inicializa estado del formulario (para limpiar después de guardar)
-if "prod_j" not in st.session_state:
-    st.session_state.prod_j = 0
-if "prod_e" not in st.session_state:
-    st.session_state.prod_e = 0
-if "gastos" not in st.session_state:
-    st.session_state.gastos = 0
-if "obs" not in st.session_state:
-    st.session_state.obs = ""
-if "fecha" not in st.session_state:
-    st.session_state.fecha = date.today()
+# ✅ Para resetear el formulario sin error
+if "form_reset" not in st.session_state:
+    st.session_state.form_reset = 0
 
 df = read_sheet()
 
@@ -209,29 +201,25 @@ with tab1:
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.subheader("Ingreso del día")
 
-    cA, cB = st.columns(2)
+    # ✅ Formulario que se resetea con form_reset
+    with st.form(key=f"form_dia_{st.session_state.form_reset}"):
+        cA, cB = st.columns(2)
 
-    with cA:
-        fecha = st.date_input("Fecha", value=st.session_state.fecha, key="fecha")
-        st.number_input("Producido JORGE", min_value=0, step=1000, key="prod_j")
-        st.number_input("Gastos del día (solo 1)", min_value=0, step=1000, key="gastos")
+        with cA:
+            fecha = st.date_input("Fecha", value=date.today())
+            prod_j = st.number_input("Producido JORGE", min_value=0, step=1000)
+            gastos = st.number_input("Gastos del día (solo 1)", min_value=0, step=1000)
 
-    with cB:
-        st.number_input("Producido ERIK", min_value=0, step=1000, key="prod_e")
-        st.text_area("Observación del día", height=110, key="obs")
+        with cB:
+            prod_e = st.number_input("Producido ERIK", min_value=0, step=1000)
+            obs = st.text_area("Observación del día", height=110)
 
-    guardar = st.button("Guardar / Actualizar ✅")
+        guardar = st.form_submit_button("Guardar / Actualizar ✅")
+
     st.markdown('</div>', unsafe_allow_html=True)
 
     if guardar:
-        # Captura valores actuales
-        f = st.session_state.fecha
-        pj = st.session_state.prod_j
-        pe = st.session_state.prod_e
-        g = st.session_state.gastos
-        o = st.session_state.obs
-
-        df2 = upsert_day(df, f, pj, pe, g, o)
+        df2 = upsert_day(df, fecha, prod_j, prod_e, gastos, obs)
         write_sheet(df2)
         st.cache_data.clear()
 
@@ -239,20 +227,15 @@ with tab1:
         st.success("✅ CONFIRMADO ERIK — Información guardada/actualizada correctamente.")
         st.info(
             f"📌 Guardado:\n"
-            f"- Fecha: {fecha_es(f)}\n"
-            f"- Jorge: {formato_pesos(pj)}\n"
-            f"- Erik: {formato_pesos(pe)}\n"
-            f"- Gastos: {formato_pesos(g)}\n"
-            f"- Observación: {o if o else '—'}"
+            f"- Fecha: {fecha_es(fecha)}\n"
+            f"- Jorge: {formato_pesos(prod_j)}\n"
+            f"- Erik: {formato_pesos(prod_e)}\n"
+            f"- Gastos: {formato_pesos(gastos)}\n"
+            f"- Observación: {obs if obs else '—'}"
         )
 
-        # ✅ Limpia el formulario
-        st.session_state.prod_j = 0
-        st.session_state.prod_e = 0
-        st.session_state.gastos = 0
-        st.session_state.obs = ""
-
-        # Recarga para ver datos actualizados
+        # ✅ Reset del formulario
+        st.session_state.form_reset += 1
         st.rerun()
 
 with tab2:
